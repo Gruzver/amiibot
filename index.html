@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AMII - LED Controller</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -290,7 +290,6 @@
         </div>
 
         <div class="grid">
-            <!-- LED Controls -->
             <div class="card">
                 <h3 class="card-title">LED 1</h3>
                 <div class="led-control">
@@ -315,7 +314,6 @@
                 </div>
             </div>
 
-            <!-- Sync Section -->
             <div class="card sync-section">
                 <h3 class="card-title">Control Sincronizado</h3>
                 <div class="sync-controls">
@@ -324,7 +322,6 @@
                 </div>
             </div>
 
-            <!-- Control Buttons -->
             <div class="control-buttons">
                 <button class="btn off" onclick="turnOffAll()">🔴 Apagar Todo</button>
                 <button class="btn rainbow" onclick="rainbowEffect()">🌈 Arcoíris</button>
@@ -332,7 +329,6 @@
                 <button class="btn wave" onclick="waveEffect()">🌊 Onda</button>
             </div>
 
-            <!-- Log -->
             <div class="card">
                 <h3 class="card-title">Log de Comandos</h3>
                 <div class="log" id="logContainer">
@@ -344,11 +340,12 @@
 
     <script>
         // Configuración MQTT
+        // Usa wss para conexión segura por WebSockets
         const MQTT_BROKER = "broker.hivemq.com";
-        const MQTT_PORT = 8000; // WebSocket port
+        const MQTT_PORT = 8884; // Puerto seguro para WebSockets (wss)
         const CONTROL_TOPIC = "esp32_amii/control/leds";
         
-        let client;
+        let client = null;
         let isConnected = false;
         let isSyncMode = false;
         let effectRunning = false;
@@ -362,40 +359,51 @@
 
         // Inicializar conexión MQTT
         function initMQTT() {
+            // Generar un ID de cliente único para evitar conflictos
             const clientId = "amii_web_" + Math.random().toString(16).substr(2, 8);
-            client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, clientId);
+            const host = `wss://${MQTT_BROKER}:${MQTT_PORT}/mqtt`;
             
-            client.onConnectionLost = onConnectionLost;
-            client.onMessageArrived = onMessageArrived;
+            addLog('🚀 Iniciando conexión con ' + host + '...');
             
-            client.connect({
-                onSuccess: onConnect,
-                onFailure: onConnectFailure,
-                useSSL: false
+            client = mqtt.connect(host, { clientId: clientId });
+
+            // Manejadores de eventos de conexión
+            client.on('connect', () => {
+                isConnected = true;
+                statusDot.classList.add('connected');
+                statusText.textContent = 'Conectado';
+                addLog('✅ Conectado al broker MQTT', 'success');
             });
-        }
+            
+            client.on('reconnect', () => {
+                addLog('🔄 Reintentando conexión...', 'info');
+            });
+            
+            client.on('error', (error) => {
+                isConnected = false;
+                statusDot.classList.remove('connected');
+                statusText.textContent = 'Error';
+                addLog('❌ Error de conexión: ' + error.message, 'error');
+            });
 
-        function onConnect() {
-            isConnected = true;
-            statusDot.classList.add('connected');
-            statusText.textContent = 'Conectado';
-            addLog('✅ Conectado al broker MQTT', 'success');
-        }
+            client.on('close', () => {
+                isConnected = false;
+                statusDot.classList.remove('connected');
+                statusText.textContent = 'Desconectado';
+                addLog('⚠️ Conexión cerrada', 'error');
+            });
 
-        function onConnectFailure(error) {
-            addLog('❌ Error de conexión: ' + error.errorMessage, 'error');
-            setTimeout(initMQTT, 5000); // Reintentar en 5 segundos
-        }
-
-        function onConnectionLost(error) {
-            isConnected = false;
-            statusDot.classList.remove('connected');
-            statusText.textContent = 'Desconectado';
-            addLog('⚠️ Conexión perdida', 'error');
-        }
-
-        function onMessageArrived(message) {
-            // Procesar mensajes recibidos si es necesario
+            client.on('offline', () => {
+                isConnected = false;
+                statusDot.classList.remove('connected');
+                statusText.textContent = 'Desconectado';
+                addLog('⚠️ Sin conexión a internet', 'error');
+            });
+            
+            // Manejador para mensajes entrantes (útil si tu ESP32 responde)
+            client.on('message', (topic, message) => {
+                addLog(`📨 Mensaje recibido en ${topic}: ${message.toString()}`, 'info');
+            });
         }
 
         // Función para enviar comandos
@@ -407,10 +415,13 @@
 
             try {
                 const payload = JSON.stringify(command);
-                const message = new Paho.MQTT.Message(payload);
-                message.destinationName = CONTROL_TOPIC;
-                client.send(message);
-                addLog('📤 Comando enviado: ' + payload, 'success');
+                client.publish(CONTROL_TOPIC, payload, {}, (error) => {
+                    if (error) {
+                        addLog('❌ Error al publicar: ' + error.message, 'error');
+                    } else {
+                        addLog('📤 Comando enviado: ' + payload, 'success');
+                    }
+                });
             } catch (error) {
                 addLog('❌ Error enviando comando: ' + error.message, 'error');
             }
@@ -569,10 +580,7 @@
         }
 
         // Inicializar aplicación
-        window.addEventListener('load', function() {
-            addLog('🚀 Iniciando conexión MQTT...');
-            initMQTT();
-        });
+        window.addEventListener('load', initMQTT);
     </script>
 </body>
 </html>
