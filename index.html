@@ -6,343 +6,297 @@
     <title>AMII - LED Controller</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --primary-color: #007bff;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --connecting-color: #ffc107;
+            --connected-color: #28a745;
+            --disconnected-color: #6c757d;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
         }
 
         .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            background-color: var(--bg-bg);
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 40px;
-        }
-
-        .title {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: white;
-            text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            margin-bottom: 10px;
-        }
-
-        .subtitle {
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 1.1rem;
-        }
-
-        .connection-status {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 10px 20px;
-            border-radius: 25px;
-            margin-top: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .status-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #ff4757;
-            animation: pulse 2s infinite;
-        }
-
-        .status-dot.connected {
-            background: #2ed573;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 30px;
             margin-bottom: 30px;
         }
 
-        .card {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 25px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-        }
-
-        .card-title {
-            font-size: 1.2rem;
+        .title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 5px;
             color: white;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: var(--text-color);
+        }
+
+        .status-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 15px;
+        }
+
+        .status-dot {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-text {
+            font-weight: 600;
+        }
+
+        .status-dot.connected { background-color: var(--connected-color); }
+        .status-dot.disconnected { background-color: var(--disconnected-color); animation: none; }
+        .status-dot.connecting { background-color: var(--connecting-color); }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+
+        .section-card {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
             font-weight: 600;
             margin-bottom: 20px;
             text-align: center;
+            color: white;
         }
 
-        .led-control {
-            text-align: center;
+        .led-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+
+        .led-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         .led-number {
-            display: inline-block;
-            width: 30px;
-            height: 30px;
-            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-            color: white;
-            border-radius: 50%;
-            line-height: 30px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 10px;
         }
 
         .color-input {
-            width: 100px;
-            height: 100px;
-            border: none;
-            border-radius: 50%;
-            cursor: pointer;
-            margin: 0 auto;
-            display: block;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-            transition: transform 0.2s ease;
-        }
-
-        .color-input:hover {
-            transform: scale(1.1);
-        }
-
-        .sync-section {
-            grid-column: 1 / -1;
-            text-align: center;
-        }
-
-        .sync-controls {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-
-        .sync-toggle {
-            background: linear-gradient(45deg, #3742fa, #2f3542);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 50px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        .sync-toggle:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-        }
-
-        .sync-toggle.active {
-            background: linear-gradient(45deg, #2ed573, #1dd1a1);
-        }
-
-        .master-color {
             width: 80px;
             height: 80px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            opacity: 0.5;
-            transition: opacity 0.3s ease;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
         }
-
-        .master-color.active {
-            opacity: 1;
-            border-color: #2ed573;
-        }
-
-        .control-buttons {
-            grid-column: 1 / -1;
+        
+        .color-input::-webkit-color-swatch-wrapper { padding: 0; }
+        .color-input::-webkit-color-swatch { border-radius: 50%; border: none; }
+        .color-input:active { transform: scale(1.1); }
+        
+        .sync-controls {
             display: flex;
-            justify-content: center;
-            gap: 20px;
-            flex-wrap: wrap;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .sync-toggle {
+            width: 100%;
+            padding: 12px;
+            border-radius: 25px;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background-color 0.3s ease;
+        }
+
+        .sync-toggle.active { background-color: var(--success-color); color: white; }
+        .sync-toggle:not(.active) { background-color: #333; color: var(--text-color); }
+        
+        .master-color-container {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 2px solid var(--text-color);
+            transition: border-color 0.3s ease;
+        }
+
+        .master-color-container.active { border-color: var(--success-color); }
+
+        .master-color {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            border: none;
+            opacity: 0;
+        }
+
+        .master-color-preview {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            transition: background-color 0.3s ease;
+        }
+        
+        .master-color-preview.inactive { opacity: 0.5; }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
         }
 
         .btn {
-            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-            color: white;
+            padding: 12px;
+            border-radius: 25px;
             border: none;
-            padding: 15px 30px;
-            border-radius: 50px;
-            font-size: 1rem;
-            font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            min-width: 150px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: white;
+            transition: transform 0.2s ease;
         }
 
-        .btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-        }
+        .btn:active { transform: scale(0.95); }
 
-        .btn.off {
-            background: linear-gradient(45deg, #2c2c54, #40407a);
-        }
-
-        .btn.rainbow {
-            background: linear-gradient(45deg, #ff9ff3, #f368e0);
-        }
-
-        .btn.party {
-            background: linear-gradient(45deg, #feca57, #ff9ff3);
-        }
-
-        .btn.wave {
-            background: linear-gradient(45deg, #48dbfb, #0abde3);
-        }
-
-        .log {
-            grid-column: 1 / -1;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            padding: 20px;
+        .btn.off { background-color: #444; }
+        .btn.rainbow { background-color: #ff69b4; }
+        .btn.party { background-color: #ffd700; }
+        .btn.wave { background-color: #1e90ff; }
+        
+        .log-container {
             max-height: 200px;
             overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
+            background-color: #0d0d0d;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 0.8rem;
+            line-height: 1.5;
         }
 
-        .log-entry {
-            color: rgba(255, 255, 255, 0.8);
-            margin-bottom: 5px;
-        }
+        .log-entry.success { color: var(--success-color); }
+        .log-entry.error { color: var(--danger-color); }
+        .log-entry.info { color: var(--connecting-color); }
 
-        .log-entry.success {
-            color: #2ed573;
-        }
-
-        .log-entry.error {
-            color: #ff4757;
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 20px;
-            }
-
-            .title {
-                font-size: 2rem;
-            }
-
-            .grid {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-
-            .sync-controls {
-                flex-direction: column;
-            }
-
-            .control-buttons {
-                flex-direction: column;
-                align-items: center;
-            }
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
+        <header class="header">
             <h1 class="title">AMII</h1>
             <p class="subtitle">LED Controller Panel</p>
-            <div class="connection-status">
-                <div class="status-dot" id="statusDot"></div>
-                <span id="statusText">Desconectado</span>
+            <div class="status-container">
+                <div class="status-dot disconnected" id="statusDot"></div>
+                <span class="status-text" id="statusText">Desconectado</span>
             </div>
-        </div>
+        </header>
 
-        <div class="grid">
-            <div class="card">
-                <h3 class="card-title">LED 1</h3>
-                <div class="led-control">
-                    <div class="led-number">1</div>
-                    <input type="color" class="color-input" id="led1Color" value="#ff0000">
+        <main>
+            <section class="section-card">
+                <h2 class="section-title">Control Individual</h2>
+                <div class="led-grid">
+                    <div class="led-item">
+                        <span class="led-number">LED 1</span>
+                        <input type="color" class="color-input" id="led1Color" value="#ff0000">
+                    </div>
+                    <div class="led-item">
+                        <span class="led-number">LED 2</span>
+                        <input type="color" class="color-input" id="led2Color" value="#00ff00">
+                    </div>
+                    <div class="led-item">
+                        <span class="led-number">LED 3</span>
+                        <input type="color" class="color-input" id="led3Color" value="#0000ff">
+                    </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="card">
-                <h3 class="card-title">LED 2</h3>
-                <div class="led-control">
-                    <div class="led-number">2</div>
-                    <input type="color" class="color-input" id="led2Color" value="#00ff00">
-                </div>
-            </div>
-
-            <div class="card">
-                <h3 class="card-title">LED 3</h3>
-                <div class="led-control">
-                    <div class="led-number">3</div>
-                    <input type="color" class="color-input" id="led3Color" value="#0000ff">
-                </div>
-            </div>
-
-            <div class="card sync-section">
-                <h3 class="card-title">Control Sincronizado</h3>
+            <section class="section-card">
+                <h2 class="section-title">Control Sincronizado</h2>
                 <div class="sync-controls">
                     <button class="sync-toggle" id="syncToggle">Activar Sincronización</button>
-                    <input type="color" class="color-input master-color" id="masterColor" value="#ffffff">
+                    <div class="master-color-container" id="masterColorContainer">
+                        <div class="master-color-preview" id="masterColorPreview" style="background-color: #ffffff;"></div>
+                        <input type="color" class="master-color" id="masterColor" value="#ffffff">
+                    </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="control-buttons">
-                <button class="btn off" onclick="turnOffAll()">🔴 Apagar Todo</button>
-                <button class="btn rainbow" onclick="rainbowEffect()">🌈 Arcoíris</button>
-                <button class="btn party" onclick="partyMode()">🎉 Fiesta</button>
-                <button class="btn wave" onclick="waveEffect()">🌊 Onda</button>
-            </div>
+            <section class="section-card">
+                <h2 class="section-title">Modos de Efectos</h2>
+                <div class="button-grid">
+                    <button class="btn off" onclick="turnOffAll()">Apagar Todo</button>
+                    <button class="btn rainbow" onclick="rainbowEffect()">Arcoíris</button>
+                    <button class="btn party" onclick="partyMode()">Modo Fiesta</button>
+                    <button class="btn wave" onclick="waveEffect()">Efecto Onda</button>
+                </div>
+            </section>
 
-            <div class="card">
-                <h3 class="card-title">Log de Comandos</h3>
-                <div class="log" id="logContainer">
+            <section class="section-card">
+                <h2 class="section-title">Log de Comandos</h2>
+                <div class="log-container" id="logContainer">
                     <div class="log-entry">Sistema iniciado - Esperando conexión...</div>
                 </div>
-            </div>
-        </div>
+            </section>
+        </main>
     </div>
 
     <script>
         // Configuración MQTT
-        // Usa wss para conexión segura por WebSockets
         const MQTT_BROKER = "broker.hivemq.com";
-        const MQTT_PORT = 8884; // Puerto seguro para WebSockets (wss)
+        const MQTT_PORT = 8884;
         const CONTROL_TOPIC = "esp32_amii/control/leds";
         
         let client = null;
@@ -355,11 +309,11 @@
         const statusText = document.getElementById('statusText');
         const syncToggle = document.getElementById('syncToggle');
         const masterColor = document.getElementById('masterColor');
+        const masterColorPreview = document.getElementById('masterColorPreview');
+        const masterColorContainer = document.getElementById('masterColorContainer');
         const logContainer = document.getElementById('logContainer');
 
-        // Inicializar conexión MQTT
         function initMQTT() {
-            // Generar un ID de cliente único para evitar conflictos
             const clientId = "amii_web_" + Math.random().toString(16).substr(2, 8);
             const host = `wss://${MQTT_BROKER}:${MQTT_PORT}/mqtt`;
             
@@ -367,46 +321,49 @@
             
             client = mqtt.connect(host, { clientId: clientId });
 
-            // Manejadores de eventos de conexión
             client.on('connect', () => {
                 isConnected = true;
                 statusDot.classList.add('connected');
+                statusDot.classList.remove('disconnected', 'connecting');
                 statusText.textContent = 'Conectado';
                 addLog('✅ Conectado al broker MQTT', 'success');
             });
             
             client.on('reconnect', () => {
+                statusDot.classList.add('connecting');
+                statusText.textContent = 'Reconectando';
                 addLog('🔄 Reintentando conexión...', 'info');
             });
             
             client.on('error', (error) => {
                 isConnected = false;
-                statusDot.classList.remove('connected');
+                statusDot.classList.add('disconnected');
+                statusDot.classList.remove('connected', 'connecting');
                 statusText.textContent = 'Error';
                 addLog('❌ Error de conexión: ' + error.message, 'error');
             });
 
             client.on('close', () => {
                 isConnected = false;
-                statusDot.classList.remove('connected');
+                statusDot.classList.add('disconnected');
+                statusDot.classList.remove('connected', 'connecting');
                 statusText.textContent = 'Desconectado';
                 addLog('⚠️ Conexión cerrada', 'error');
             });
 
             client.on('offline', () => {
                 isConnected = false;
-                statusDot.classList.remove('connected');
+                statusDot.classList.add('disconnected');
+                statusDot.classList.remove('connected', 'connecting');
                 statusText.textContent = 'Desconectado';
                 addLog('⚠️ Sin conexión a internet', 'error');
             });
             
-            // Manejador para mensajes entrantes (útil si tu ESP32 responde)
             client.on('message', (topic, message) => {
                 addLog(`📨 Mensaje recibido en ${topic}: ${message.toString()}`, 'info');
             });
         }
 
-        // Función para enviar comandos
         function sendCommand(command) {
             if (!isConnected) {
                 addLog('❌ No conectado al broker', 'error');
@@ -427,7 +384,6 @@
             }
         }
 
-        // Función para agregar logs
         function addLog(message, type = '') {
             const logEntry = document.createElement('div');
             logEntry.className = `log-entry ${type}`;
@@ -436,7 +392,6 @@
             logContainer.scrollTop = logContainer.scrollHeight;
         }
 
-        // Convertir hex a RGB
         function hexToRgb(hex) {
             const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
             return result ? [
@@ -446,7 +401,6 @@
             ] : [0, 0, 0];
         }
 
-        // Event listeners para controles individuales
         document.getElementById('led1Color').addEventListener('change', function() {
             if (!isSyncMode) {
                 const color = hexToRgb(this.value);
@@ -468,37 +422,39 @@
             }
         });
 
-        // Control de sincronización
         syncToggle.addEventListener('click', function() {
             isSyncMode = !isSyncMode;
             
             if (isSyncMode) {
                 this.textContent = 'Desactivar Sincronización';
                 this.classList.add('active');
-                masterColor.classList.add('active');
+                masterColorContainer.classList.add('active');
                 addLog('🔄 Modo sincronización activado');
             } else {
                 this.textContent = 'Activar Sincronización';
                 this.classList.remove('active');
-                masterColor.classList.remove('active');
+                masterColorContainer.classList.remove('active');
                 addLog('🔄 Modo sincronización desactivado');
             }
         });
 
-        // Control maestro
+        masterColor.addEventListener('input', function() {
+            if (isSyncMode) {
+                masterColorPreview.style.backgroundColor = this.value;
+            }
+        });
+
         masterColor.addEventListener('change', function() {
             if (isSyncMode) {
                 const color = hexToRgb(this.value);
                 sendCommand({all: color});
                 
-                // Sincronizar colores individuales
                 document.getElementById('led1Color').value = this.value;
                 document.getElementById('led2Color').value = this.value;
                 document.getElementById('led3Color').value = this.value;
             }
         });
 
-        // Funciones de efectos
         function turnOffAll() {
             if (effectRunning) return;
             sendCommand({all: [0, 0, 0]});
@@ -509,24 +465,14 @@
             if (effectRunning) return;
             effectRunning = true;
             addLog('🌈 Iniciando efecto arcoíris...');
-
-            const colors = [
-                [255, 0, 0],    // Rojo
-                [255, 127, 0],  // Naranja
-                [255, 255, 0],  // Amarillo
-                [0, 255, 0],    // Verde
-                [0, 0, 255],    // Azul
-                [75, 0, 130],   // Índigo
-                [148, 0, 211]   // Violeta
-            ];
-
+            // ... (rest of the rainbowEffect code)
+            const colors = [[255, 0, 0], [255, 127, 0], [255, 255, 0], [0, 255, 0], [0, 0, 255], [75, 0, 130], [148, 0, 211]];
             for (let cycle = 0; cycle < 10; cycle++) {
                 for (let color of colors) {
                     sendCommand({all: color});
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
-
             sendCommand({all: [0, 0, 0]});
             effectRunning = false;
             addLog('🌈 Efecto arcoíris completado');
@@ -536,20 +482,15 @@
             if (effectRunning) return;
             effectRunning = true;
             addLog('🎉 Iniciando modo fiesta...');
-
+            // ... (rest of the partyMode code)
             for (let i = 0; i < 20; i++) {
                 const leds = [];
                 for (let j = 0; j < 3; j++) {
-                    leds.push([
-                        Math.floor(Math.random() * 256),
-                        Math.floor(Math.random() * 256),
-                        Math.floor(Math.random() * 256)
-                    ]);
+                    leds.push([Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)]);
                 }
                 sendCommand({leds: leds});
                 await new Promise(resolve => setTimeout(resolve, 300));
             }
-
             sendCommand({all: [0, 0, 0]});
             effectRunning = false;
             addLog('🎉 Modo fiesta completado');
@@ -559,27 +500,19 @@
             if (effectRunning) return;
             effectRunning = true;
             addLog('🌊 Iniciando efecto onda...');
-
-            const wave = [
-                [[255, 0, 0], [0, 0, 0], [0, 0, 0]],
-                [[0, 0, 0], [255, 0, 0], [0, 0, 0]],
-                [[0, 0, 0], [0, 0, 0], [255, 0, 0]],
-                [[0, 0, 0], [255, 0, 0], [0, 0, 0]],
-            ];
-
+            // ... (rest of the waveEffect code)
+            const wave = [[[255, 0, 0], [0, 0, 0], [0, 0, 0]], [[0, 0, 0], [255, 0, 0], [0, 0, 0]], [[0, 0, 0], [0, 0, 0], [255, 0, 0]], [[0, 0, 0], [255, 0, 0], [0, 0, 0]]];
             for (let cycle = 0; cycle < 10; cycle++) {
                 for (let frame of wave) {
                     sendCommand({leds: frame});
                     await new Promise(resolve => setTimeout(resolve, 200));
                 }
             }
-
             sendCommand({all: [0, 0, 0]});
             effectRunning = false;
             addLog('🌊 Efecto onda completado');
         }
 
-        // Inicializar aplicación
         window.addEventListener('load', initMQTT);
     </script>
 </body>
