@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMII - LED Controller</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #000000;
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, #1a1a1a 0%, #000000 70%);
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+            padding-top: 20px;
+        }
+
+        .title {
+            font-size: 3.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #a8a8a8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            font-size: 1.25rem;
+            color: #a8a8a8;
+            font-weight: 400;
+            margin-bottom: 30px;
+        }
+
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(28, 28, 30, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff3b30;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #30d158;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.95); }
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: rgba(28, 28, 30, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 32px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 24px;
+            text-align: center;
+            letter-spacing: -0.01em;
+        }
+
+        .led-control {
+            text-align: center;
+        }
+
+        .led-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+        }
+
+        .color-palette-container {
+            margin: 20px 0;
+        }
+
+        .color-palette {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 8px;
+            max-width: 280px;
+            margin: 0 auto 16px;
+        }
+
+        .color-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.1);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .color-swatch.selected {
+            border-color: #007aff;
+            transform: scale(1.15);
+            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.3);
+        }
+
+        .current-color {
+            width: 80px;
+            height: 80px;
+            border-radius: 16px;
+            margin: 16px auto;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .sync-section {
+            grid-column: 1 / -1;
+            text-align: center;
+            background: rgba(48, 48, 52, 0.6);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .sync-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .sync-toggle {
+            background: rgba(72, 72, 74, 0.8);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .sync-toggle:hover {
+            background: rgba(99, 99, 102, 0.8);
+            transform: translateY(-2px);
+        }
+
+        .sync-toggle.active {
+            background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
+            border-color: #007aff;
+            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+        }
+
+        .master-palette {
+            opacity: 0.4;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .master-palette.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .control-buttons {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: rgba(72, 72, 74, 0.8);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 14px 28px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            min-width: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            background: rgba(99, 99, 102, 0.8);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn.off {
+            background: linear-gradient(135deg, #ff3b30 0%, #d70015 100%);
+            border-color: #ff3b30;
+        }
+
+        .btn.off:hover {
+            background: linear-gradient(135deg, #ff453a 0%, #e0051e 100%);
+            box-shadow: 0 8px 32px rgba(255, 59, 48, 0.3);
+        }
+
+        .btn.rainbow {
+            background: linear-gradient(135deg, #ff2d92 0%, #ffcc02 50%, #32d74b 100%);
+            border-color: transparent;
+        }
+
+        .btn.party {
+            background: linear-gradient(135deg, #ff9500 0%, #ff2d92 100%);
+            border-color: transparent;
+        }
+
+        .btn.wave {
+            background: linear-gradient(135deg, #5ac8fa 0%, #007aff 100%);
+            border-color: transparent;
+        }
+
+        .log-section {
+            grid-column: 1 / -1;
+            background: rgba(20, 20, 22, 0.8);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .log {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            color: #a8a8a8;
+            margin-bottom: 6px;
+            font-weight: 400;
+        }
+
+        .log-entry.success {
+            color: #30d158;
+        }
+
+        .log-entry.error {
+            color: #ff453a;
+        }
+
+        /* Custom scrollbar for webkit browsers */
+        .log::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .log::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .log::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            .title {
+                font-size: 2.5rem;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .sync-controls {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .control-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .color-palette {
+                grid-template-columns: repeat(6, 1fr);
+            }
+        }
+
+        /* Loading animation */
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border-top-color: #007aff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="background"></div>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">AMII</h1>
+            <p class="subtitle">LED Controller</p>
+            <div class="connection-status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Conectando...</span>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- LED 1 Control -->
+            <div class="card">
+                <h3 class="card-title">LED 1</h3>
+                <div class="led-control">
+                    <div class="led-number">1</div>
+                    <div class="current-color" id="led1Current" style="background: #ff0000;"></div>
+                    <div class="color-palette-container">
+                        <div class="color-palette" data-led="0">
+                            <div class="color-swatch" style="background: #ff0000;" data-color="#ff0000"></div>
+                            <div class="color-swatch" style="background: #ff8000;" data-color="#ff8000"></div>
+                            <div class="color-swatch" style="background: #ffff00;" data-color="#ffff00"></div>
+                            <div class="color-swatch" style="background: #80ff00;" data-color="#80ff00"></div>
+                            <div class="color-swatch" style="background: #00ff00;" data-color="#00ff00"></div>
+                            <div class="color-swatch" style="background: #00ff80;" data-color="#00ff80"></div>
+                            <div class="color-swatch" style="background: #00ffff;" data-color="#00ffff"></div>
+                            <div class="color-swatch" style="background: #0080ff;" data-color="#0080ff"></div>
+                            <div class="color-swatch" style="background: #0000ff;" data-color="#0000ff"></div>
+                            <div class="color-swatch" style="background: #8000ff;" data-color="#8000ff"></div>
+                            <div class="color-swatch" style="background: #ff00ff;" data-color="#ff00ff"></div>
+                            <div class="color-swatch" style="background: #ff0080;" data-color="#ff0080"></div>
+                            <div class="color-swatch" style="background: #ffffff;" data-color="#ffffff"></div>
+                            <div class="color-swatch" style="background: #c0c0c0;" data-color="#c0c0c0"></div>
+                            <div class="color-swatch" style="background: #808080;" data-color="#808080"></div>
+                            <div class="color-swatch" style="background: #000000;" data-color="#000000"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LED 2 Control -->
+            <div class="card">
+                <h3 class="card-title">LED 2</h3>
+                <div class="led-control">
+                    <div class="led-number">2</div>
+                    <div class="current-color" id="led2Current" style="background: #00ff00;"></div>
+                    <div class="color-palette-container">
+                        <div class="color-palette" data-led="1">
+                            <div class="color-swatch" style="background: #ff0000;" data-color="#ff0000"></div>
+                            <div class="color-swatch" style="background: #ff8000;" data-color="#ff8000"></div>
+                            <div class="color-swatch" style="background: #ffff00;" data-color="#ffff00"></div>
+                            <div class="color-swatch" style="background: #80ff00;" data-color="#80ff00"></div>
+                            <div class="color-swatch selected" style="background: #00ff00;" data-color="#00ff00"></div>
+                            <div class="color-swatch" style="background: #00ff80;" data-color="#00ff80"></div>
+                            <div class="color-swatch" style="background: #00ffff;" data-color="#00ffff"></div>
+                            <div class="color-swatch" style="background: #0080ff;" data-color="#0080ff"></div>
+                            <div class="color-swatch" style="background: #0000ff;" data-color="#0000ff"></div>
+                            <div class="color-swatch" style="background: #8000ff;" data-color="#8000ff"></div>
+                            <div class="color-swatch" style="background: #ff00ff;" data-color="#ff00ff"></div>
+                            <div class="color-swatch" style="background: #ff0080;" data-color="#ff0080"></div>
+                            <div class="color-swatch" style="background: #ffffff;" data-color="#ffffff"></div>
+                            <div class="color-swatch" style="background: #c0c0c0;" data-color="#c0c0c0"></div>
+                            <div class="color-swatch" style="background: #808080;" data-color="#808080"></div>
+                            <div class="color-swatch" style="background: #000000;" data-color="#000000"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LED 3 Control -->
+            <div class="card">
+                <h3 class="card-title">LED 3</h3>
+                <div class="led-control">
+                    <div class="led-number">3</div>
+                    <div class="current-color" id="led3Current" style="background: #0000ff;"></div>
+                    <div class="color-palette-container">
+                        <div class="color-palette" data-led="2">
+                            <div class="color-swatch" style="background: #ff0000;" data-color="#ff0000"></div>
+                            <div class="color-swatch" style="background: #ff8000;" data-color="#ff8000"></div>
+                            <div class="color-swatch" style="background: #ffff00;" data-color="#ffff00"></div>
+                            <div class="color-swatch" style="background: #80ff00;" data-color="#80ff00"></div>
+                            <div class="color-swatch" style="background: #00ff00;" data-color="#00ff00"></div>
+                            <div class="color-swatch" style="background: #00ff80;" data-color="#00ff80"></div>
+                            <div class="color-swatch" style="background: #00ffff;" data-color="#00ffff"></div>
+                            <div class="color-swatch" style="background: #0080ff;" data-color="#0080ff"></div>
+                            <div class="color-swatch selected" style="background: #0000ff;" data-color="#0000ff"></div>
+                            <div class="color-swatch" style="background: #8000ff;" data-color="#8000ff"></div>
+                            <div class="color-swatch" style="background: #ff00ff;" data-color="#ff00ff"></div>
+                            <div class="color-swatch" style="background: #ff0080;" data-color="#ff0080"></div>
+                            <div class="color-swatch" style="background: #ffffff;" data-color="#ffffff"></div>
+                            <div class="color-swatch" style="background: #c0c0c0;" data-color="#c0c0c0"></div>
+                            <div class="color-swatch" style="background: #808080;" data-color="#808080"></div>
+                            <div class="color-swatch" style="background: #000000;" data-color="#000000"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sync Section -->
+            <div class="card sync-section">
+                <h3 class="card-title">Control Sincronizado</h3>
+                <div class="sync-controls">
+                    <button class="sync-toggle" id="syncToggle">Activar Sincronización</button>
+                    <div class="master-palette" id="masterPalette">
+                        <div class="current-color" id="masterCurrent" style="background: #ffffff;"></div>
+                        <div class="color-palette" data-led="master">
+                            <div class="color-swatch" style="background: #ff0000;" data-color="#ff0000"></div>
+                            <div class="color-swatch" style="background: #ff8000;" data-color="#ff8000"></div>
+                            <div class="color-swatch" style="background: #ffff00;" data-color="#ffff00"></div>
+                            <div class="color-swatch" style="background: #80ff00;" data-color="#80ff00"></div>
+                            <div class="color-swatch" style="background: #00ff00;" data-color="#00ff00"></div>
+                            <div class="color-swatch" style="background: #00ff80;" data-color="#00ff80"></div>
+                            <div class="color-swatch" style="background: #00ffff;" data-color="#00ffff"></div>
+                            <div class="color-swatch" style="background: #0080ff;" data-color="#0080ff"></div>
+                            <div class="color-swatch" style="background: #0000ff;" data-color="#0000ff"></div>
+                            <div class="color-swatch" style="background: #8000ff;" data-color="#8000ff"></div>
+                            <div class="color-swatch" style="background: #ff00ff;" data-color="#ff00ff"></div>
+                            <div class="color-swatch" style="background: #ff0080;" data-color="#ff0080"></div>
+                            <div class="color-swatch selected" style="background: #ffffff;" data-color="#ffffff"></div>
+                            <div class="color-swatch" style="background: #c0c0c0;" data-color="#c0c0c0"></div>
+                            <div class="color-swatch" style="background: #808080;" data-color="#808080"></div>
+                            <div class="color-swatch" style="background: #000000;" data-color="#000000"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Buttons -->
+            <div class="control-buttons">
+                <button class="btn off" onclick="turnOffAll()">● Apagar</button>
+                <button class="btn rainbow" onclick="rainbowEffect()">◐ Arcoíris</button>
+                <button class="btn party" onclick="partyMode()">✦ Fiesta</button>
+                <button class="btn wave" onclick="waveEffect()">～ Onda</button>
+            </div>
+
+            <!-- Log Section -->
+            <div class="card log-section">
+                <h3 class="card-title">Log del Sistema</h3>
+                <div class="log" id="logContainer">
+                    <div class="log-entry">Sistema iniciado - Conectando al broker MQTT...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuración MQTT
+        const MQTT_BROKER = "broker.hivemq.com";
+        const MQTT_PORT = 8000;
+        const CONTROL_TOPIC = "esp32_amii/control/leds";
+        
+        let client;
+        let isConnected = false;
+        let isSyncMode = false;
+        let effectRunning = false;
+
+        // Elementos DOM
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const syncToggle = document.getElementById('syncToggle');
+        const masterPalette = document.getElementById('masterPalette');
+        const logContainer = document.getElementById('logContainer');
+
+        // Inicializar conexión MQTT
+        function initMQTT() {
+            const clientId = "amii_web_" + Math.random().toString(16).substr(2, 8);
+            client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, clientId);
+            
+            client.onConnectionLost = onConnectionLost;
+            client.onMessageArrived = onMessageArrived;
+            
+            client.connect({
+                onSuccess: onConnect,
+                onFailure: onConnectFailure,
+                useSSL: false
+            });
+        }
+
+        function onConnect() {
+            isConnected = true;
+            statusDot.classList.add('connected');
+            statusText.textContent = 'Conectado';
+            addLog('✓ Conectado al broker MQTT', 'success');
+        }
+
+        function onConnectFailure(error) {
+            addLog('✗ Error de conexión: ' + error.errorMessage, 'error');
+            statusText.textContent = 'Error de conexión';
+            setTimeout(initMQTT, 5000);
+        }
+
+        function onConnectionLost(error) {
+            isConnected = false;
+            statusDot.classList.remove('connected');
+            statusText.textContent = 'Desconectado';
+            addLog('! Conexión perdida - Reintentando...', 'error');
+            setTimeout(initMQTT, 3000);
+        }
+
+        function onMessageArrived(message) {
+            // Procesar mensajes si es necesario
+        }
+
+        // Función para enviar comandos
+        function sendCommand(command) {
+            if (!isConnected) {
+                addLog('✗ Sin conexión al broker', 'error');
+                return;
+            }
+
+            try {
+                const payload = JSON.stringify(command);
+                const message = new Paho.MQTT.Message(payload);
+                message.destinationName = CONTROL_TOPIC;
+                client.send(message);
+                addLog('→ ' + payload, 'success');
+            } catch (error) {
+                addLog('✗ Error: ' + error.message, 'error');
+            }
+        }
+
+        // Función para agregar logs
+        function addLog(message, type = '') {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.textContent = new Date().toLocaleTimeString() + ' ' + message;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Mantener solo las últimas 50 entradas
+            if (logContainer.children.length > 50) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+        }
+
+        // Convertir hex a RGB
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? [
+                parseInt(result[1], 16),
+                parseInt(result[2], 16),
+                parseInt(result[3], 16)
+            ] : [0, 0, 0];
+        }
+
+        // Manejar clicks en paletas de colores
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('color-swatch')) {
+                const palette = e.target.parentElement;
+                const ledIndex = palette.getAttribute('data-led');
+                const color = e.target.getAttribute('data-color');
+                
+                // Remover selección anterior en esta paleta
+                palette.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+                e.target.classList.add('selected');
+                
+                // Actualizar color actual
+                if (ledIndex === 'master') {
+                    document.getElementById('masterCurrent').style.background = color;
+                    if (isSyncMode) {
+                        const rgb = hexToRgb(color);
+                        sendCommand({all: rgb});
+                        
+                        // Sincronizar con LEDs individuales
+                        updateAllLEDs(color);
+                    }
+                } else {
+                    const ledNum = parseInt(ledIndex);
+                    document.getElementById(`led${ledNum + 1}Current`).style.background = color;
+                    
+                    if (!isSyncMode) {
+                        const rgb = hexToRgb(color);
+                        sendCommand({led: ledNum, color: rgb});
+                    }
+                }
+            }
+        });
+
+        // Actualizar todos los LEDs con el mismo color
+        function updateAllLEDs(color) {
+            for (let i = 1; i <= 3; i++) {
+                document.getElementById(`led${i}Current`).style.background = color;
+                
+                // Actualizar selección en paletas individuales
+                const palette = document.querySelector(`[data-led="${i-1}"]`);
+                palette.querySelectorAll('.color-swatch').forEach(s => {
+                    s.classList.remove('selected');
+                    if (s.getAttribute('data-color') === color) {
+                        s.classList.add('selected');
+                    }
+                });
+            }
+        }
+
+        // Control de sincronización
+        syncToggle.addEventListener('click', function() {
+            isSyncMode = !isSyncMode;
+            
+            if (isSyncMode) {
+                this.textContent = 'Desactivar Sincronización';
+                this.classList.add('active');
+                masterPalette.classList.add('active');
+                addLog('◉ Modo sincronización activado');
+            } else {
+                this.textContent = 'Activar Sincronización';
+                this.classList.remove('active');
+                masterPalette.classList.remove('active');
+                addLog('○ Modo sincronización desactivado');
+            }
+        });
+
+        // Funciones de efectos
+        function turnOffAll() {
+            if (effectRunning) return;
+            sendCommand({all: [0, 0, 0]});
+            addLog('● Todos los LEDs apagados');
+            updateAllLEDs('#000000');
+        }
+
+        async function rainbowEffect() {
+            if (effectRunning) return;
+            effectRunning = true;
+            addLog('◐ Iniciando efecto arcoíris...');
+
+            const colors = [
+                [255, 0, 0],    // Rojo
+                [255, 127, 0],  // Naranja
+                [255, 255, 0],  // Amarillo
+                [0, 255, 0],    // Verde
+                [0, 0, 255],    // Azul
+                [75, 0, 130],   // Índigo
+                [148, 0, 211]   // Violeta
+            ];
+
+            const hexColors = ['#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3'];
+
+            for (let cycle = 0; cycle < 8; cycle++) {
+                for (let i = 0; i < colors.length; i++) {
+                    sendCommand({all: colors[i]});
+                    updateAllLEDs(hexColors[i]);
+                    await new Promise(resolve => setTimeout(resolve, 400));
+                }
+            }
+
+            sendCommand({all: [0, 0, 0]});
+            updateAllLEDs('#000000');
+            effectRunning = false;
+            addLog('◐ Efecto arcoíris completado');
+        }
+
+        async function partyMode() {
+            if (effectRunning) return;
+            effectRunning = true;
+            addLog('✦ Iniciando modo fiesta...');
+
+            for (let i = 0; i < 25; i++) {
+                const leds = [];
+                const hexColors = [];
+                
+                for (let j = 0; j < 3; j++) {
+                    const r = Math.floor(Math.random() * 256);
+                    const g = Math.floor(Math.random() * 256);
+                    const b = Math.floor(Math.random() * 256);
+                    leds.push([r, g, b]);
+                    
+                    const hex = '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+                    hexColors.push(hex);
+                }
+                
+                sendCommand({leds: leds});
+                
+                // Actualizar visualización
+                for (let k = 0; k < 3; k++) {
+                    document.getElementById(`led${k + 1}Current`).style.background = hexColors[k];
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 250));
+            }
+
+            sendCommand({all: [0, 0, 0]});
+            updateAllLEDs('#000000');
+            effectRunning = false;
+            addLog('✦ Modo fiesta completado');
+        }
+
+        async function waveEffect() {
+            if (effectRunning) return;
+            effectRunning = true;
+            addLog('～ Iniciando efecto onda...');
+
+            const waveFrames = [
+                {leds: [[0, 150, 255], [0, 0, 0], [0, 0, 0]], colors: ['#0096ff', '#000000', '#000000']},
+                {leds: [[0, 75, 128], [0, 150, 255], [0, 0, 0]], colors: ['#004b80', '#0096ff', '#000000']},
+                {leds: [[0, 0, 0], [0, 75, 128], [0, 150, 255]], colors: ['#000000', '#004b80', '#0096ff']},
+                {leds: [[0, 0, 0], [0, 0, 0], [0, 75, 128]], colors: ['#000000', '#000000', '#004b80']},
+                {leds: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], colors: ['#000000', '#000000', '#000000']},
+            ];
+
+            for (let cycle = 0; cycle < 12; cycle++) {
+                for (let frame of waveFrames) {
+                    sendCommand({leds: frame.leds});
+                    
+                    // Actualizar visualización
+                    for (let i = 0; i < 3; i++) {
+                        document.getElementById(`led${i + 1}Current`).style.background = frame.colors[i];
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 180));
+                }
+            }
+
+            sendCommand({all: [0, 0, 0]});
+            updateAllLEDs('#000000');
+            effectRunning = false;
+            addLog('～ Efecto onda completado');
+        }
+
+        // Inicializar aplicación
+        window.addEventListener('load', function() {
+            addLog('⚡ Inicializando sistema...');
+            
+            // Marcar colores iniciales como seleccionados
+            document.querySelector('[data-led="0"] [data-color="#ff0000"]').classList.add('selected');
+            document.querySelector('[data-led="2"] [data-color="#0000ff"]').classList.add('selected');
+            
+            // Iniciar conexión MQTT
+            setTimeout(() => {
+                addLog('🔗 Conectando al broker MQTT...');
+                initMQTT();
+            }, 1000);
+        });
+
+        // Prevenir zoom en mobile al hacer doble click
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function (event) {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
+    </script>
+</body>
+</html>
